@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2019-2022  Igara Studio S.A.
+// Copyright (C) 2019-2023  Igara Studio S.A.
 //
 // This program is distributed under the terms of
 // the End-User License Agreement for Aseprite.
@@ -48,6 +48,17 @@ int Tileset_getTile(lua_State* L)
   return 1;
 }
 
+int Tileset_tile(lua_State* L)
+{
+  auto tileset = get_docobj<Tileset>(L, 1);
+  tile_index ti = lua_tointeger(L, 2);
+  if (ti >= 0 && ti < tileset->size())
+    push_tile(L, tileset, ti);
+  else
+    lua_pushnil(L);
+  return 1;
+}
+
 int Tileset_get_name(lua_State* L)
 {
   auto tileset = get_docobj<Tileset>(L, 1);
@@ -89,8 +100,7 @@ const luaL_Reg Tileset_methods[] = {
   { "__eq", Tileset_eq },
   { "__len", Tileset_len },
   { "getTile", Tileset_getTile },
-  // TODO
-  // { "setTile", Tileset_setTile },
+  { "tile", Tileset_tile },
   { nullptr, nullptr }
 };
 
@@ -100,6 +110,7 @@ const Property Tileset_properties[] = {
   { "baseIndex", Tileset_get_baseIndex, Tileset_set_baseIndex },
   { "color", UserData_get_color<Tileset>, UserData_set_color<Tileset> },
   { "data", UserData_get_text<Tileset>, UserData_set_text<Tileset> },
+  { "properties", UserData_get_properties<Tileset>, UserData_set_properties<Tileset> },
   { nullptr, nullptr, nullptr }
 };
 
@@ -114,7 +125,7 @@ void register_tileset_class(lua_State* L)
   REG_CLASS_PROPERTIES(L, Tileset);
 }
 
-void push_tileset(lua_State* L, Tileset* tileset)
+void push_tileset(lua_State* L, const Tileset* tileset)
 {
   push_docobj(L, tileset);
 }

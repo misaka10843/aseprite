@@ -74,6 +74,29 @@ bool get_frame_info_from_filename_format(
     return false;
 }
 
+bool is_template_in_filename(const std::string& format)
+{
+  std::vector<std::string> formats{
+    "{fullname}",
+    "{path}",
+    "{name}",
+    "{title}",
+    "{extension}",
+    "{layer}",
+    "{tag}",
+    "{innertag}",
+    "{outertag}",
+    "{frame}",
+    "{tagframe}"
+  };
+  for (int i = 0; i < formats.size(); i++) {
+    if (format.find(formats[i]) != std::string::npos) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool is_tag_in_filename_format(const std::string& format)
 {
   return (format.find("{tag}") != std::string::npos);
@@ -215,6 +238,11 @@ std::string get_default_filename_format_for_sheet(
 
   format += ".{extension}";
   return format;
+}
+
+std::string get_default_tagname_format_for_sheet()
+{
+  return "{tag}";
 }
 
 } // namespace app

@@ -125,6 +125,8 @@ protected:
 
         auto newTileset = new doc::Tileset(sprite(), newGrid, tileset->size());
         doc::tile_index idx = 0;
+        newTileset->setName(tileset->name());
+        newTileset->setUserData(tileset->userData());
         for (doc::ImageRef tileImg : *tileset) {
           if (idx != 0) {
             doc::ImageRef newTileImg(
@@ -136,6 +138,7 @@ protected:
                 sprite()->rgbMap(0)));   // TODO first frame?
 
             newTileset->set(idx, newTileImg);
+            newTileset->setTileData(idx, tileset->getTileData(idx));
           }
 
           jobProgress((float)progress / img_count);

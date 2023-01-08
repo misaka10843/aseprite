@@ -87,6 +87,9 @@ namespace app {
   bool get_frame_info_from_filename_format(
     const std::string& format, int* startFrom, int* width);
 
+  // Returns true if the given filename contains a format element
+  bool is_template_in_filename(const std::string& format);
+
   // Returns true if the given filename format contains {tag}, {layer} or {group}
   bool is_tag_in_filename_format(const std::string& format);
   bool is_layer_in_filename_format(const std::string& format);
@@ -113,6 +116,8 @@ namespace app {
     const bool hasFrames,
     const bool hasLayer,
     const bool hasTag);
+
+  std::string get_default_tagname_format_for_sheet();
 
 } // namespace app
 

@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2018-2022  Igara Studio S.A.
+// Copyright (C) 2018-2023  Igara Studio S.A.
 // Copyright (C) 2015-2018  David Capello
 //
 // This program is distributed under the terms of
@@ -610,6 +610,13 @@ int Sprite_get_events(lua_State* L)
   return 1;
 }
 
+int Sprite_get_id(lua_State* L)
+{
+  auto sprite = get_docobj<Sprite>(L, 1);
+  lua_pushinteger(L, sprite->id());
+  return 1;
+}
+
 int Sprite_get_filename(lua_State* L)
 {
   auto sprite = get_docobj<Sprite>(L, 1);
@@ -861,6 +868,7 @@ const luaL_Reg Sprite_methods[] = {
 };
 
 const Property Sprite_properties[] = {
+  { "id", Sprite_get_id, nullptr },
   { "filename", Sprite_get_filename, Sprite_set_filename },
   { "isModified", Sprite_get_isModified, nullptr },
   { "width", Sprite_get_width, Sprite_set_width },
@@ -882,6 +890,7 @@ const Property Sprite_properties[] = {
   { "gridBounds", Sprite_get_gridBounds, Sprite_set_gridBounds },
   { "color", UserData_get_color<Sprite>, UserData_set_color<Sprite> },
   { "data", UserData_get_text<Sprite>, UserData_set_text<Sprite> },
+  { "properties", UserData_get_properties<Sprite>, UserData_set_properties<Sprite> },
   { "pixelRatio", Sprite_get_pixelRatio, Sprite_set_pixelRatio },
   { "events", Sprite_get_events, nullptr },
   { nullptr, nullptr, nullptr }

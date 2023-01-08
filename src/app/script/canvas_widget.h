@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (c) 2022  Igara Studio S.A.
+// Copyright (c) 2022-2023  Igara Studio S.A.
 //
 // This program is distributed under the terms of
 // the End-User License Agreement for Aseprite.
@@ -9,7 +9,12 @@
 #pragma once
 
 #include "os/surface.h"
+#include "ui/cursor_type.h"
 #include "ui/widget.h"
+
+namespace ui {
+  class TouchMessage;
+}
 
 namespace app {
 namespace script {
@@ -26,18 +31,31 @@ public:
 
   void callPaint();
 
+  void setMouseCursor(const ui::CursorType cursor) {
+    m_cursorType = cursor;
+  }
+
   obs::signal<void(GraphicsContext&)> Paint;
+  obs::signal<void(ui::KeyMessage*)> KeyDown;
+  obs::signal<void(ui::KeyMessage*)> KeyUp;
   obs::signal<void(ui::MouseMessage*)> MouseMove;
   obs::signal<void(ui::MouseMessage*)> MouseDown;
   obs::signal<void(ui::MouseMessage*)> MouseUp;
+  obs::signal<void(ui::MouseMessage*)> Wheel;
+  obs::signal<void(ui::TouchMessage*)> TouchMagnify;
+
+  static void stopKeyEventPropagation();
 
 private:
+  static bool s_stopKeyEventPropagation;
+
   void onInitTheme(ui::InitThemeEvent& ev) override;
   bool onProcessMessage(ui::Message* msg) override;
   void onResize(ui::ResizeEvent& ev) override;
   void onPaint(ui::PaintEvent& ev) override;
 
   os::SurfaceRef m_surface;
+  ui::CursorType m_cursorType = ui::kArrowCursor;
 };
 
 } // namespace script
