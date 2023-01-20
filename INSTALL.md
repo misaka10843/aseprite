@@ -19,9 +19,9 @@
 You should be able to compile Aseprite successfully on the following
 platforms:
 
-* Windows 10 + [Visual Studio Community 2022 + Windows 10.0 SDK (the latest version available)](https://imgur.com/a/7zs51IT) (we don't support [MinGW](#mingw))
-* macOS 12.3.1 Monterey + Xcode 13.1 + macOS 11.3 SDK (older version might work)
-* Linux Ubuntu Xenial 16.04 + clang 10.0
+* Windows 11 + [Visual Studio Community 2022 + Windows 10.0 SDK (the latest version available)](https://imgur.com/a/7zs51IT) (we don't support [MinGW](#mingw))
+* macOS 13.0.1 Ventura + Xcode 14.1 + macOS 11.3 SDK (older version might work)
+* Linux Ubuntu Bionic 18.04 + clang 10.0
 
 # Get the source code
 
@@ -73,7 +73,11 @@ might work).
 
 You will need the following dependencies on Ubuntu/Debian:
 
-    sudo apt-get install -y g++ clang-10 libc++-10-dev libc++abi-10-dev cmake ninja-build libx11-dev libxcursor-dev libxi-dev libgl1-mesa-dev libfontconfig1-dev
+    sudo apt-get install -y g++ clang libc++-dev libc++abi-dev cmake ninja-build libx11-dev libxcursor-dev libxi-dev libgl1-mesa-dev libfontconfig1-dev
+
+Or use clang-10 packages (or newer) in case that clang in your distribution is older than clang 10.0:
+
+    sudo apt-get install -y clang-10 libc++-10-dev libc++abi-10-dev
 
 On Fedora:
 

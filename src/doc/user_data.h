@@ -147,6 +147,8 @@ namespace doc {
     return *value;
   }
 
+  size_t count_nonempty_properties_maps(const UserData::PropertiesMaps& propertiesMaps);
+
 } // namespace doc
 
 #endif

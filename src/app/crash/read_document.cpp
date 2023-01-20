@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2018-2022  Igara Studio S.A.
+// Copyright (C) 2018-2023  Igara Studio S.A.
 // Copyright (C) 2001-2018  David Capello
 //
 // This program is distributed under the terms of
@@ -262,6 +262,8 @@ private:
           Tileset* tileset = loadObject<Tileset*>("tset", tilesetId, &Reader::readTileset);
           if (tileset)
             spr->tilesets()->add(tileset);
+          else
+            spr->tilesets()->add(nullptr);
         }
       }
     }
@@ -383,26 +385,12 @@ private:
 
     // Read Sprite User Data
     if (!s.eof()) {
-      UserData userData = readUserData(s);
+      UserData userData = read_user_data(s);
       if (!userData.isEmpty())
         spr->setUserData(userData);
     }
 
     return spr.release();
-  }
-
-  UserData readUserData(std::ifstream& s) {
-    UserData userData;
-    userData.setText(read_string(s));
-    // This check is here because we've been restoring sprites from
-    // old sessions where the color is restored incorrectly if we
-    // don't check if there is enough space to read from the file
-    // (e.g. reading a random color or just white, maybe -1 which is
-    // 0xffffffff in 32-bit).
-    if (!s.eof()) {
-      userData.setColor(read32(s));
-    }
-    return userData;
   }
 
   gfx::ColorSpaceRef readColorSpace(std::ifstream& s) {
@@ -561,6 +549,9 @@ private:
     // Fix tilemaps using old tilesets
     if (!m_updateOldTilemapWithTileset.empty()) {
       for (Tileset* tileset : *spr->tilesets()) {
+        if (!tileset)
+          continue;
+
         if (m_updateOldTilemapWithTileset.find(tileset->id()) == m_updateOldTilemapWithTileset.end())
           continue;
 

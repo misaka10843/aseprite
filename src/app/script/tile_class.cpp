@@ -33,6 +33,13 @@ struct Tile {
   }
 };
 
+int Tile_get_index(lua_State* L)
+{
+  auto tile = get_obj<Tile>(L, 1);
+  lua_pushinteger(L, tile->ti);
+  return 1;
+}
+
 int Tile_get_image(lua_State* L)
 {
   auto tile = get_obj<Tile>(L, 1);
@@ -165,6 +172,7 @@ const luaL_Reg Tile_methods[] = {
 };
 
 const Property Tile_properties[] = {
+  { "index", Tile_get_index, nullptr },
   { "image", Tile_get_image, nullptr }, // TODO Tile_set_image
   { "data", Tile_get_data, Tile_set_data },
   { "color", Tile_get_color, Tile_set_color },
@@ -185,6 +193,13 @@ void register_tile_class(lua_State* L)
 void push_tile(lua_State* L, const Tileset* ts, tile_index ti)
 {
   push_new<Tile>(L, ts, ti);
+}
+
+Tileset* get_tile_index_from_arg(lua_State* L, int index, tile_index& ti)
+{
+  Tile* tile = get_obj<Tile>(L, index);
+  ti = tile->ti;
+  return doc::get<Tileset>(tile->id);
 }
 
 } // namespace script

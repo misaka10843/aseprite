@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2018-2020  Igara Studio S.A.
+// Copyright (C) 2018-2023  Igara Studio S.A.
 // Copyright (C) 2001-2018  David Capello
 //
 // This program is distributed under the terms of
@@ -78,9 +78,14 @@ public:
         return false;
 
     if (spr->hasTilesets()) {
-      for (Tileset* tset : *spr->tilesets())
-        if (!saveObject("tset", tset, &Writer::writeTileset))
-          return false;
+      for (Tileset* tset : *spr->tilesets()) {
+        // The tileset can be nullptr if it was erased (as we keep
+        // empty spaces in the Tilesets array)
+        if (tset) {
+          if (!saveObject("tset", tset, &Writer::writeTileset))
+            return false;
+        }
+      }
     }
 
     for (Tag* frtag : spr->tags())
@@ -165,8 +170,12 @@ private:
     // IDs of all tilesets
     write32(s, spr->hasTilesets() ? spr->tilesets()->size(): 0);
     if (spr->hasTilesets()) {
-      for (Tileset* tileset : *spr->tilesets())
-        write32(s, tileset->id());
+      for (Tileset* tileset : *spr->tilesets()) {
+        if (tileset)
+          write32(s, tileset->id());
+        else
+          write32(s, 0);
+      }
     }
 
     // IDs of all main layers
@@ -195,14 +204,8 @@ private:
     writeGridBounds(s, spr->gridBounds());
 
     // Write Sprite User Data
-    writeUserData(s, spr->userData());
+    write_user_data(s, spr->userData());
 
-    return true;
-  }
-
-  bool writeUserData(std::ofstream& s, const UserData& userData) {
-    write_string(s, userData.text());
-    write32(s, (uint32_t)userData.color());
     return true;
   }
 

@@ -53,6 +53,9 @@ void GraphicsContext::drawImage(const doc::Image* img,
                                 const gfx::Rect& srcRc,
                                 const gfx::Rect& dstRc)
 {
+  if (srcRc.isEmpty() || dstRc.isEmpty())
+    return;                     // Do nothing for empty rectangles
+
   auto tmpSurface = os::instance()->makeRgbaSurface(srcRc.w, srcRc.h);
   if (tmpSurface) {
     convert_image_to_surface(
@@ -84,7 +87,34 @@ void GraphicsContext::drawThemeRect(const std::string& partId, const gfx::Rect& 
     skin::SkinPartPtr part = theme->getPartById(partId);
     if (part && part->bitmap(0)) {
       ui::Graphics g(nullptr, m_surface, 0, 0);
-      theme->drawRect(&g, rc, part.get(), true);
+
+      // TODO Copy code from Theme::paintLayer()
+
+      // 9-slices
+      if (!part->slicesBounds().isEmpty()) {
+        theme->drawRect(&g, rc, part.get(), true);
+      }
+      else {
+        ui::IntersectClip clip(&g, rc);
+        if (clip) {
+          // Horizontal line
+          if (rc.w > part->spriteBounds().w) {
+            for (int x=rc.x; x<rc.x2(); x+=part->spriteBounds().w) {
+              g.drawRgbaSurface(
+                part->bitmap(0),
+                x, rc.y+rc.h/2-part->spriteBounds().h/2);
+            }
+          }
+          // Vertical line
+          else {
+            for (int y=rc.y; y<rc.y2(); y+=part->spriteBounds().h) {
+              g.drawRgbaSurface(
+                part->bitmap(0),
+                rc.x+rc.w/2-part->spriteBounds().w/2, y);
+            }
+          }
+        }
+      }
     }
   }
 }

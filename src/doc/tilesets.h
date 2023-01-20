@@ -1,5 +1,5 @@
 // Aseprite Document Library
-// Copyright (c) 2019  Igara Studio S.A.
+// Copyright (c) 2019-2023  Igara Studio S.A.
 //
 // This file is released under the terms of the MIT license.
 // Read LICENSE.txt for more information.
@@ -40,6 +40,15 @@ namespace doc {
         return nullptr;
     }
 
+    tileset_index getIndex(Tileset *tileset) {
+      for (tileset_index i = 0; i < size(); ++i) {
+        if (m_tilesets[i] == tileset) {
+          return i;
+        }
+      }
+      return -1;
+    }
+
     void set(const tileset_index tsi, Tileset* tileset) {
       if (tsi >= m_tilesets.size())
         m_tilesets.resize(tsi+1, nullptr);
@@ -49,10 +58,16 @@ namespace doc {
     void erase(const tileset_index tsi) {
       // Do not m_tilesets.erase() the tileset so other tilesets
       // indexes/IDs are kept intact.
-      if (tsi == size()-1)
+      if (tsi == size()-1) {
         m_tilesets.erase(--m_tilesets.end());
-      else
+      }
+      else {
+        // TODO Should we keep the empty slot? Or should we update all
+        //      indexes (even from external files?). Having a nullptr
+        //      tileset in the sprite adds a lot of complexity (each
+        //      for-loop must check the tileset)
         m_tilesets[tsi] = nullptr;
+      }
     }
 
   private:

@@ -33,6 +33,7 @@
 #include "ui/grid.h"
 #include "ui/label.h"
 #include "ui/manager.h"
+#include "ui/menu.h"
 #include "ui/message.h"
 #include "ui/separator.h"
 #include "ui/slider.h"
@@ -60,10 +61,10 @@ std::vector<Dialog*> all_dialogs;
 
 struct Dialog {
   ui::Window window;
-  ui::VBox vbox;
   ui::Grid grid;
   ui::HBox* hbox = nullptr;
   bool autoNewRow = false;
+  WidgetsList mainWidgets;
   std::map<std::string, ui::Widget*> dataWidgets;
   std::map<std::string, ui::Widget*> labelWidgets;
   int currentRadioGroup = 0;
@@ -82,8 +83,9 @@ struct Dialog {
   int showRef = LUA_REFNIL;
   lua_State* L = nullptr;
 
-  Dialog()
-    : window(ui::Window::WithTitleBar, "Script"),
+  Dialog(const ui::Window::Type windowType,
+         const std::string& title)
+    : window(windowType, title),
       grid(2, false) {
     window.addChild(&grid);
     all_dialogs.push_back(this);
@@ -141,15 +143,24 @@ struct Dialog {
       it->second->setText(text);
   }
 
+  Display* parentDisplay() const {
+    Display* parentDisplay = window.parentDisplay();
+    if (!parentDisplay) {
+      const auto mainWindow = App::instance()->mainWindow();
+      parentDisplay = mainWindow->display();
+    }
+    return parentDisplay;
+  }
+
   gfx::Rect getWindowBounds() const {
     gfx::Rect bounds = window.bounds();
-    // Bounds in scripts will be relative to the the main window
-    // origin/scale.
+    // Bounds in scripts will be relative to the parent window
+    // origin/scale (or main window if a parent window wasn't specified).
     if (window.ownDisplay()) {
-      const auto mainWindow = App::instance()->mainWindow();
-      const int scale = mainWindow->display()->scale();
+      const Display* parentDisplay = this->parentDisplay();
+      const int scale = parentDisplay->scale();
       const gfx::Point dialogOrigin = window.display()->nativeWindow()->contentRect().origin();
-      const gfx::Point mainOrigin = mainWindow->display()->nativeWindow()->contentRect().origin();
+      const gfx::Point mainOrigin = parentDisplay->nativeWindow()->contentRect().origin();
       bounds.setOrigin((dialogOrigin - mainOrigin) / scale);
     }
     return bounds;
@@ -159,9 +170,9 @@ struct Dialog {
     if (window.ownDisplay()) {
       window.expandWindow(rc.size());
 
-      const auto mainWindow = App::instance()->mainWindow();
-      const int scale = mainWindow->display()->scale();
-      const gfx::Point mainOrigin = mainWindow->display()->nativeWindow()->contentRect().origin();
+      Display* parentDisplay = this->parentDisplay();
+      const int scale = parentDisplay->scale();
+      const gfx::Point mainOrigin = parentDisplay->nativeWindow()->contentRect().origin();
       gfx::Rect frame = window.display()->nativeWindow()->contentRect();
       frame.setOrigin(mainOrigin + rc.origin() * scale);
       window.display()->nativeWindow()->setFrame(frame);
@@ -244,7 +255,21 @@ int Dialog_new(lua_State* L)
   if (!App::instance()->isGui())
     return 0;
 
-  auto dlg = push_new<Dialog>(L);
+  // Get the title, if it's empty, create a window without title bar
+  std::string title;
+  if (lua_isstring(L, 1)) {
+    title = lua_tostring(L, 1);
+  }
+  else if (lua_istable(L, 1)) {
+    int type = lua_getfield(L, 1, "title");
+    if (type != LUA_TNIL)
+      title = lua_tostring(L, -1);
+    lua_pop(L, 1);
+  }
+
+  auto dlg = push_new<Dialog>(
+    L, (!title.empty() ? ui::Window::WithTitleBar:
+                         ui::Window::WithoutTitleBar), title);
 
   // The uservalue of the dialog userdata will contain a table that
   // stores all the callbacks to handle events. As these callbacks can
@@ -255,13 +280,12 @@ int Dialog_new(lua_State* L)
   lua_newtable(L);
   lua_setuservalue(L, -2);
 
-  if (lua_isstring(L, 1)) {
-    dlg->window.setText(lua_tostring(L, 1));
-  }
-  else if (lua_istable(L, 1)) {
-    int type = lua_getfield(L, 1, "title");
-    if (type != LUA_TNIL)
-      dlg->window.setText(lua_tostring(L, -1));
+  if (lua_istable(L, 1)) {
+    int type = lua_getfield(L, 1, "parent");
+    if (type != LUA_TNIL) {
+      if (auto parentDlg = may_get_obj<Dialog>(L, -1))
+        dlg->window.setParentDisplay(parentDlg->window.display());
+    }
     lua_pop(L, 1);
 
     type = lua_getfield(L, 1, "onclose");
@@ -321,6 +345,54 @@ int Dialog_show(lua_State* L)
     dlg->window.openWindowInForeground();
   else
     dlg->window.openWindow();
+
+  lua_pushvalue(L, 1);
+  return 1;
+}
+
+namespace {
+  class MoveChildren {
+  public:
+    MoveChildren(Dialog* dlg, Widget* to)
+      : m_dlg(dlg)
+      , m_to(to) {
+      for (auto child : m_dlg->mainWidgets) {
+        m_oldParents[child] = child->parent();
+        m_to->addChild(child);
+      }
+    }
+    ~MoveChildren() {
+      for (auto child : m_dlg->mainWidgets)
+        m_oldParents[child]->addChild(child);
+    }
+  private:
+    Dialog* m_dlg;
+    Widget* m_to;
+    std::map<Widget*, Widget*> m_oldParents;
+  };
+}
+
+int Dialog_showMenu(lua_State* L)
+{
+  auto dlg = get_obj<Dialog>(L, 1);
+  Menu popup;
+  MoveChildren moveChildren(dlg, &popup);
+
+  // By default show the menu in the mouse position
+  gfx::Point pt =
+    dlg->parentDisplay()->nativeWindow()
+    ->pointFromScreen(ui::get_mouse_position());
+
+  if (lua_istable(L, 2)) {
+    if (lua_getfield(L, 2, "position") != LUA_TNIL) {
+      pt = convert_args_into_point(L, -1);
+    }
+    lua_pop(L, 1);
+  }
+
+  dlg->refShow(L);
+  popup.showPopup(pt, dlg->parentDisplay());
+  dlg->unrefShow();
 
   lua_pushvalue(L, 1);
   return 1;
@@ -424,6 +496,7 @@ int Dialog_add_widget(lua_State* L, Widget* widget)
     dlg->hbox = hbox;
   }
 
+  dlg->mainWidgets.push_back(widget);
   widget->setExpansive(hexpand);
   dlg->hbox->addChild(widget);
 
@@ -480,6 +553,7 @@ int Dialog_separator(lua_State* L)
     dlg->dataWidgets[id] = widget;
   }
 
+  dlg->mainWidgets.push_back(widget);
   dlg->grid.addChildInCell(widget, 2, 1, ui::HORIZONTAL | ui::TOP);
   dlg->hbox = nullptr;
 
@@ -506,6 +580,8 @@ int Dialog_label(lua_State* L)
 template<typename T>
 int Dialog_button_base(lua_State* L, T** outputWidget = nullptr)
 {
+  auto dlg = get_obj<Dialog>(L, 1);
+
   std::string text;
   if (lua_istable(L, 2)) {
     int type = lua_getfield(L, 2, "text");
@@ -532,20 +608,27 @@ int Dialog_button_base(lua_State* L, T** outputWidget = nullptr)
 
     type = lua_getfield(L, 2, "onclick");
     if (type == LUA_TFUNCTION) {
-      auto dlg = get_obj<Dialog>(L, 1);
       Dialog_connect_signal(
         L, 1, widget->Click,
-        [dlg, widget](lua_State* L, Event&){
-          if (widget->type() == ui::kButtonWidget)
-            dlg->lastButton = widget;
+        [dlg, widget](lua_State* L){
+          // Do nothing
         });
       closeWindowByDefault = false;
     }
     lua_pop(L, 1);
   }
 
-  if (closeWindowByDefault)
-    widget->Click.connect([widget](ui::Event&){ widget->closeWindow(); });
+  if (closeWindowByDefault) {
+    widget->Click.connect([dlg, widget](){
+      widget->closeWindow();
+    });
+  }
+  if (widget->type() == ui::kButtonWidget ||
+      widget->type() == ui::kMenuItemWidget) {
+    widget->Click.connect([dlg, widget](){
+      dlg->lastButton = widget;
+    });
+  }
 
   return Dialog_add_widget(L, widget);
 }
@@ -583,6 +666,11 @@ int Dialog_radio(lua_State* L)
     radio->setRadioGroup(dlg->currentRadioGroup);
   }
   return res;
+}
+
+int Dialog_menuItem(lua_State* L)
+{
+  return Dialog_button_base<ui::MenuItem>(L);
 }
 
 int Dialog_entry(lua_State* L)
@@ -1306,6 +1394,7 @@ int Dialog_get_data(lua_State* L)
       case ui::kButtonWidget:
       case ui::kCheckWidget:
       case ui::kRadioWidget:
+      case ui::kMenuItemWidget:
         lua_pushboolean(L, widget->isSelected() ||
                            dlg->window.closer() == widget ||
                            dlg->lastButton == widget);
@@ -1495,6 +1584,7 @@ int Dialog_set_bounds(lua_State* L)
 const luaL_Reg Dialog_methods[] = {
   { "__gc", Dialog_gc },
   { "show", Dialog_show },
+  { "showMenu", Dialog_showMenu },
   { "close", Dialog_close },
   { "newrow", Dialog_newrow },
   { "separator", Dialog_separator },
@@ -1502,6 +1592,7 @@ const luaL_Reg Dialog_methods[] = {
   { "button", Dialog_button },
   { "check", Dialog_check },
   { "radio", Dialog_radio },
+  { "menuItem", Dialog_menuItem },
   { "entry", Dialog_entry },
   { "number", Dialog_number },
   { "slider", Dialog_slider },
