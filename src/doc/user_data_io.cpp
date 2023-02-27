@@ -1,4 +1,5 @@
 // Aseprite Document Library
+// Copyright (c) 2023 Igara Studio S.A.
 // Copyright (c) 2001-2015 David Capello
 //
 // This file is released under the terms of the MIT license.
@@ -21,53 +22,19 @@ namespace doc {
 using namespace base::serialization;
 using namespace base::serialization::little_endian;
 
-void write_properties_maps(std::ostream& os, const UserData::PropertiesMaps& propertiesMaps);
-UserData::PropertiesMaps read_properties_maps(std::istream& is);
-
-void write_user_data(std::ostream& os, const UserData& userData)
-{
-  write_string(os, userData.text());
-  write32(os, userData.color());
-  write_properties_maps(os, userData.propertiesMaps());
-}
-
-UserData read_user_data(std::istream& is)
-{
-  UserData userData;
-  userData.setText(read_string(is));
-  // This check is here because we've been restoring sprites from
-  // old sessions where the color is restored incorrectly if we
-  // don't check if there is enough space to read from the file
-  // (e.g. reading a random color or just white, maybe -1 which is
-  // 0xffffffff in 32-bit).
-  if (!is.eof()) {
-    userData.setColor(read32(is));
-    userData.propertiesMaps() = read_properties_maps(is);
-  }
-  return userData;
-}
-
-size_t count_nonempty_properties_maps(const UserData::PropertiesMaps& propertiesMaps) {
-  size_t i = 0;
-  for (const auto& it : propertiesMaps)
-    if (!it.second.empty())
-      ++i;
-  return i;
-}
-
-void write_point(std::ostream& os, const gfx::Point& point)
+static void write_point(std::ostream& os, const gfx::Point& point)
 {
   write32(os, point.x);
   write32(os, point.y);
 }
 
-void write_size(std::ostream& os, const gfx::Size& size)
+static void write_size(std::ostream& os, const gfx::Size& size)
 {
   write32(os, size.w);
   write32(os, size.h);
 }
 
-void write_property_value(std::ostream& os, const UserData::Variant& variant)
+static void write_property_value(std::ostream& os, const UserData::Variant& variant)
 {
   switch (variant.type())
   {
@@ -125,9 +92,8 @@ void write_property_value(std::ostream& os, const UserData::Variant& variant)
     case USER_DATA_PROPERTY_TYPE_VECTOR: {
         const std::vector<UserData::Variant>& vector = get_value<std::vector<UserData::Variant>>(variant);
         write32(os, vector.size());
-        const uint16_t type = vector.size() == 0 ? 0 : vector.front().type();
-        write16(os, type);
         for (auto elem : vector) {
+          write16(os, elem.type());
           write_property_value(os, elem);
         }
       break;
@@ -149,7 +115,7 @@ void write_property_value(std::ostream& os, const UserData::Variant& variant)
   }
 }
 
-void write_properties_maps(std::ostream& os, const UserData::PropertiesMaps& propertiesMaps)
+static void write_properties_maps(std::ostream& os, const UserData::PropertiesMaps& propertiesMaps)
 {
   write32(os, propertiesMaps.size());
   for (auto propertiesMap : propertiesMaps) {
@@ -160,7 +126,14 @@ void write_properties_maps(std::ostream& os, const UserData::PropertiesMaps& pro
   }
 }
 
-UserData::Variant read_property_value(std::istream& is, uint16_t type)
+void write_user_data(std::ostream& os, const UserData& userData)
+{
+  write_string(os, userData.text());
+  write32(os, userData.color());
+  write_properties_maps(os, userData.propertiesMaps());
+}
+
+static UserData::Variant read_property_value(std::istream& is, uint16_t type)
 {
   switch (type) {
     case USER_DATA_PROPERTY_TYPE_NULLPTR: {
@@ -237,10 +210,10 @@ UserData::Variant read_property_value(std::istream& is, uint16_t type)
     }
     case USER_DATA_PROPERTY_TYPE_VECTOR: {
       auto numElems = read32(is);
-      auto elemsType = read16(is);
       std::vector<doc::UserData::Variant> value;
       for (int k=0; k<numElems;++k) {
-        value.push_back(read_property_value(is, elemsType));
+        auto elemType = read16(is);
+        value.push_back(read_property_value(is, elemType));
       }
       return value;
     }
@@ -259,7 +232,7 @@ UserData::Variant read_property_value(std::istream& is, uint16_t type)
   return doc::UserData::Variant{};
 }
 
-UserData::PropertiesMaps read_properties_maps(std::istream& is)
+static UserData::PropertiesMaps read_properties_maps(std::istream& is)
 {
   doc::UserData::PropertiesMaps propertiesMaps;
   size_t nmaps = read32(is);
@@ -269,6 +242,22 @@ UserData::PropertiesMaps read_properties_maps(std::istream& is)
     propertiesMaps[extensionId] = doc::get_value<doc::UserData::Properties>(properties);
   }
   return propertiesMaps;
+}
+
+UserData read_user_data(std::istream& is)
+{
+  UserData userData;
+  userData.setText(read_string(is));
+  // This check is here because we've been restoring sprites from
+  // old sessions where the color is restored incorrectly if we
+  // don't check if there is enough space to read from the file
+  // (e.g. reading a random color or just white, maybe -1 which is
+  // 0xffffffff in 32-bit).
+  if (!is.eof()) {
+    userData.setColor(read32(is));
+    userData.propertiesMaps() = read_properties_maps(is);
+  }
+  return userData;
 }
 
 }

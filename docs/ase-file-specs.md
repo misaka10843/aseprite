@@ -116,6 +116,10 @@ Then each chunk format is:
     WORD        Chunk type
     BYTE[]      Chunk data
 
+The chunk size includes the DWORD of the size itself, and the WORD of
+the chunk type, so a chunk size must be equal or greater than 6 bytes
+at least.
+
 ## Chunk Types
 
 ### Old palette chunk (0x0004)
@@ -148,8 +152,8 @@ Ignore this chunk if you find the new palette chunk (0x2019)
 
 ### Layer Chunk (0x2004)
 
-  In the first frame should be a set of layer chunks to determine the
-  entire layers layout:
+In the first frame should be a set of layer chunks to determine the
+entire layers layout:
 
     WORD        Flags:
                   1 = Visible
@@ -275,8 +279,9 @@ reference external palettes, tilesets, or extensions that make use of extended p
                   0 - External palette
                   1 - External tileset
                   2 - Extension name for properties
+                  3 - Extension name for tile management (can exist one per sprite)
       BYTE[7]   Reserved (set to zero)
-      STRING    External file name or extension ID
+      STRING    External file name or extension ID (see NOTE.4)
 
 ### Mask Chunk (0x2016) DEPRECATED
 
@@ -343,18 +348,25 @@ for each tag.
 
 ### User Data Chunk (0x2020)
 
-Insert this user data in the last read chunk.  E.g. If we've read a
-layer, this user data belongs to that layer, if we've read a cel, it
-belongs to that cel, etc. There are some special cases: After a Tags
-chunk, there will be several user data fields, one for each tag, you
-should associate the user data in the same order as the tags are in
-the Tags chunk. Another special case is after the Tileset chunk, it
-could be followed by a user data chunk (empty or not) and then all
-the user data chunks of the tiles ordered by tile index, or it could
-be followed by none user data chunk if the file was created in an
-older Aseprite version.
-In version 1.3 a sprite has associated user data, to consider this case
-there is an User Data Chunk at the first frame after the Palette Chunk.
+Specifies the user data (color/text/properties) to be associated with
+the last read chunk/object. E.g. If the last chunk we've read is a
+layer and then this chunk appears, this user data belongs to that
+layer, if we've read a cel, it belongs to that cel, etc. There are
+some special cases:
+
+1. After a Tags chunk, there will be several user data chunks, one for
+   each tag, you should associate the user data in the same order as
+   the tags are in the Tags chunk.
+2. After the Tileset chunk, it could be followed by a user data chunk
+   (empty or not) and then all the user data chunks of the tiles
+   ordered by tile index, or it could be followed by none user data
+   chunk (if the file was created in an older Aseprite version of if
+   no tile has user data).
+3. In Aseprite v1.3 a sprite has associated user data, to consider
+   this case there is an User Data Chunk at the first frame after the
+   Palette Chunk.
+
+The data of this chunk is as follows:
 
     DWORD       Flags
                   1 = Has text
@@ -369,6 +381,8 @@ there is an User Data Chunk at the first frame after the Palette Chunk.
       BYTE      Color Alpha (0-255)
     + If flags have bit 4
       DWORD     Size in bytes of all properties maps stored in this chunk
+                The size includes the this field and the number of property maps
+                (so it will be a value greater or equal to 8 bytes).
       DWORD     Number of properties maps
       + For each properties map:
         DWORD     Properties maps key
@@ -413,9 +427,16 @@ there is an User Data Chunk at the first frame after the Palette Chunk.
             RECT
           + If type==0x0011 (vector)
             DWORD     Number of elements
-            WORD      Element's type
-            BYTE[]    As many values as the number of elements indicates
-                      Structure depends on the element's type
+            WORD      Element's type.
+            + If Element's type == 0 (all elements are not of the same type)
+              For each element:
+                WORD      Element's type
+                BYTE[]    Element's value. Structure depends on the
+                          element's type
+            + Else (all elements are of the same type)
+              For each element:
+                BYTE[]    Element's value. Structure depends on the
+                          element's type
           + If type==0x0012 (nested properties map)
             DWORD     Number of properties
             BYTE[]    Nested properties data
@@ -494,8 +515,9 @@ the last one read, for example:
 
 #### NOTE.2
 
-The layer index is a number to identify any layer in the sprite, for
-example:
+The layer index is a number to identify a layer in the sprite. Layers
+are numbered in the same order as Layer Chunks (0x2004) appear in the
+file, for example:
 
     Layer name and hierarchy      Layer index
     -----------------------------------------------
@@ -506,6 +528,9 @@ example:
       |  `- Layer2                4
       `- Layer3                   5
 
+It means that in the file you will find the `Background` layer chunk
+first, then the `Layer1` layer chunk, etc.
+
 #### NOTE.3
 
 Details about the ZLIB and DEFLATE compression methods:
@@ -514,6 +539,15 @@ Details about the ZLIB and DEFLATE compression methods:
 * https://www.ietf.org/rfc/rfc1951
 * Some extra notes that might help you to decode the data:
   http://george.chiramattel.com/blog/2007/09/deflatestream-block-length-does-not-match.html
+
+#### NOTE.4
+
+The extension ID must be a string like `publisher/ExtensionName`, for
+example, the [Aseprite Attachment System](https://github.com/aseprite/Attachment-System)
+uses `aseprite/Attachment-System`.
+
+This string will be used in a future to automatically link to the
+extension URL in the [Aseprite Store](https://github.com/aseprite/aseprite/issues/1928).
 
 ## File Format Changes
 

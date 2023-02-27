@@ -209,6 +209,7 @@ if(ENABLE_SCRIPTING)
     script/tile_class.cpp
     script/tileset_class.cpp
     script/tilesets_class.cpp
+    script/timer_class.cpp
     script/tool_class.cpp
     script/values.cpp
     script/version_class.cpp
@@ -520,6 +521,7 @@ add_library(app-lib
   cmd/set_slice_key.cpp
   cmd/set_slice_name.cpp
   cmd/set_sprite_size.cpp
+  cmd/set_sprite_tile_management_plugin.cpp
   cmd/set_tag_anidir.cpp
   cmd/set_tag_color.cpp
   cmd/set_tag_name.cpp

@@ -16,6 +16,7 @@
 #include "gfx/rect.h"
 
 #include <cstddef>
+#include <limits>
 #include <map>
 #include <stdexcept>
 #include <string>
@@ -147,7 +148,27 @@ namespace doc {
     return *value;
   }
 
+  template<typename T, typename U>
+  inline bool is_compatible_int(const U u) {
+    static_assert(sizeof(U) > sizeof(T), "T type must be smaller than U type");
+    return (u >= std::numeric_limits<T>::min() &&
+            u <= std::numeric_limits<T>::max());
+  }
+
+  inline bool is_reducible_int(const UserData::Variant& variant) {
+    return (variant.type() >= USER_DATA_PROPERTY_TYPE_INT16 &&
+            variant.type() <= USER_DATA_PROPERTY_TYPE_UINT64);
+  }
+
   size_t count_nonempty_properties_maps(const UserData::PropertiesMaps& propertiesMaps);
+
+  // If all the elements of vector have the same type, returns that type, also
+  // if this type is an integer, it tries to reduce it to the minimum int type
+  // capable of storing all the vector values.
+  // If all the elements of vector doesn't have the same type, returns 0.
+  uint16_t all_elements_of_same_type(const UserData::Vector& vector);
+  UserData::Variant cast_to_smaller_int_type(const UserData::Variant& value, uint16_t type);
+  UserData::Variant reduce_int_type_size(const UserData::Variant& value);
 
 } // namespace doc
 
