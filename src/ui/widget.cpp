@@ -203,6 +203,8 @@ void Widget::setStyle(Style* style)
   m_style = style;
   m_border = m_theme->calcBorder(this, style);
   m_bgColor = m_theme->calcBgColor(this, style);
+  m_minSize = m_theme->calcMinSize(this, style);
+  m_maxSize = m_theme->calcMaxSize(this, style);
   if (style->font())
     m_font = AddRef(style->font());
 }
@@ -580,9 +582,13 @@ void Widget::removeChild(const WidgetsList::iterator& it)
   else
     return;
 
-  // Free child from manager
-  if (auto man = manager())
+  if (auto man = manager()) {
+    // Remove all paint messages for this widget.
+    man->removeMessagesFor(child, kPaintMessage);
+
+    // Free child from manager.
     man->freeWidget(child);
+  }
 
   child->m_parent = nullptr;
   child->m_parentIndex = -1;
@@ -966,15 +972,17 @@ void Widget::getTextIconInfo(
   // Box position
   if (align() & RIGHT)
     box_x = bounds.x2() - box_w - border().right();
-  else if (align() & CENTER)
-    box_x = (bounds.x+bounds.x2())/2 - box_w/2;
+  else if (align() & CENTER) {
+    box_x = CALC_FOR_CENTER(bounds.x + border().top(), bounds.w - border().width(), box_w);
+  }
   else
     box_x = bounds.x + border().left();
 
   if (align() & BOTTOM)
     box_y = bounds.y2() - box_h - border().bottom();
-  else if (align() & MIDDLE)
-    box_y = (bounds.y+bounds.y2())/2 - box_h/2;
+  else if (align() & MIDDLE) {
+    box_y = CALC_FOR_CENTER(bounds.y + border().left(), bounds.h - border().height(), box_h);
+  }
   else
     box_y = bounds.y + border().top();
 
@@ -986,8 +994,8 @@ void Widget::getTextIconInfo(
       icon_x = box_x + box_w - icon_w;
     }
     else if (icon_align & CENTER) {
-      text_x = box_x + box_w/2 - text_w/2;
-      icon_x = box_x + box_w/2 - icon_w/2;
+      text_x = CALC_FOR_CENTER(box_x, box_w, text_w);
+      icon_x = CALC_FOR_CENTER(box_x, box_w, icon_w);
     }
     else {
       text_x = box_x + box_w - text_w;
@@ -1000,8 +1008,8 @@ void Widget::getTextIconInfo(
       icon_y = box_y + box_h - icon_h;
     }
     else if (icon_align & MIDDLE) {
-      text_y = box_y + box_h/2 - text_h/2;
-      icon_y = box_y + box_h/2 - icon_h/2;
+      text_y = CALC_FOR_CENTER(box_y, box_h, text_h);
+      icon_y = CALC_FOR_CENTER(box_y, box_h, icon_h);
     }
     else {
       text_y = box_y + box_h - text_h;

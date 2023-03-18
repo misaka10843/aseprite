@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (c) 2022  Igara Studio S.A.
+// Copyright (c) 2022-2023  Igara Studio S.A.
 //
 // This program is distributed under the terms of
 // the End-User License Agreement for Aseprite.
@@ -61,6 +61,17 @@ public:
 
   float strokeWidth() const { return m_paint.strokeWidth(); }
   void strokeWidth(float value) { m_paint.strokeWidth(value); }
+
+#if LAF_SKIA
+  float opacity() const { return m_paint.skPaint().getAlphaf(); }
+  void opacity(float value) { m_paint.skPaint().setAlphaf(value); }
+#else
+  float opacity() const { return 1.0f; }
+  void opacity(float) { }
+#endif
+
+  os::BlendMode blendMode() const { return m_paint.blendMode(); }
+  void blendMode(const os::BlendMode bm) { m_paint.blendMode(bm); }
 
   void strokeRect(const gfx::Rect& rc) {
     m_paint.style(os::Paint::Stroke);

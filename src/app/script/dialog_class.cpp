@@ -614,7 +614,7 @@ int Dialog_button_base(lua_State* L, T** outputWidget = nullptr)
     if (type == LUA_TFUNCTION) {
       Dialog_connect_signal(
         L, 1, widget->Click,
-        [dlg, widget](lua_State* L){
+        [](lua_State*){
           // Do nothing
         });
       closeWindowByDefault = false;
@@ -623,7 +623,7 @@ int Dialog_button_base(lua_State* L, T** outputWidget = nullptr)
   }
 
   if (closeWindowByDefault) {
-    widget->Click.connect([dlg, widget](){
+    widget->Click.connect([widget](){
       widget->closeWindow();
     });
   }
@@ -1016,7 +1016,10 @@ static void fill_keymessage_values(lua_State* L, const ui::KeyMessage* msg)
 
   // KeyMessage specifics
   lua_pushinteger(L, msg->repeat());
-  lua_setfield(L, -2, "repeat");
+  lua_setfield(L, -2, "repeat"); // Only for backward compatibility, remove this in a future
+
+  lua_pushinteger(L, msg->repeat());
+  lua_setfield(L, -2, "repeatCount");
 
   // TODO improve this (create an Event metatable)
   lua_pushcfunction(L, [](lua_State*) -> int {

@@ -1,5 +1,5 @@
 // Aseprite
-// Copyright (C) 2022  Igara Studio S.A.
+// Copyright (C) 2022-2023  Igara Studio S.A.
 //
 // This program is distributed under the terms of
 // the End-User License Agreement for Aseprite.
@@ -13,6 +13,7 @@
 #include "app/color.h"
 #include "app/color_utils.h"
 #include "app/modules/palettes.h"
+#include "app/script/blend_mode.h"
 #include "app/script/engine.h"
 #include "app/script/luacpp.h"
 #include "app/ui/skin/skin_theme.h"
@@ -56,7 +57,14 @@ void GraphicsContext::drawImage(const doc::Image* img,
   if (srcRc.isEmpty() || dstRc.isEmpty())
     return;                     // Do nothing for empty rectangles
 
-  auto tmpSurface = os::instance()->makeRgbaSurface(srcRc.w, srcRc.h);
+  static os::SurfaceRef tmpSurface = nullptr;
+  if (!tmpSurface ||
+      tmpSurface->width() < srcRc.w ||
+      tmpSurface->height() < srcRc.h) {
+    tmpSurface = os::instance()->makeRgbaSurface(
+      std::max(srcRc.w, (tmpSurface ? tmpSurface->width(): 0)),
+      std::max(srcRc.h, (tmpSurface ? tmpSurface->height(): 0)));
+  }
   if (tmpSurface) {
     convert_image_to_surface(
       img,
@@ -66,9 +74,8 @@ void GraphicsContext::drawImage(const doc::Image* img,
       0, 0,
       srcRc.w, srcRc.h);
 
-    m_surface->drawSurface(tmpSurface.get(),
-                           tmpSurface->bounds(),
-                           dstRc);
+    m_surface->drawSurface(tmpSurface.get(), gfx::Rect(0, 0, srcRc.w, srcRc.h),
+                           dstRc, os::Sampling(), &m_paint);
   }
 }
 
@@ -390,6 +397,37 @@ int GraphicsContext_set_strokeWidth(lua_State* L)
   return 1;
 }
 
+int GraphicsContext_get_blendMode(lua_State* L)
+{
+  auto gc = get_obj<GraphicsContext>(L, 1);
+  lua_pushinteger(
+    L, int(base::convert_to<app::script::BlendMode>(gc->blendMode())));
+  return 0;
+}
+
+int GraphicsContext_set_blendMode(lua_State* L)
+{
+  auto gc = get_obj<GraphicsContext>(L, 1);
+  gc->blendMode(base::convert_to<os::BlendMode>(
+                  app::script::BlendMode(lua_tointeger(L, 2))));
+  return 0;
+}
+
+int GraphicsContext_get_opacity(lua_State* L)
+{
+  auto gc = get_obj<GraphicsContext>(L, 1);
+  lua_pushnumber(L, gc->opacity());
+  return 1;
+}
+
+int GraphicsContext_set_opacity(lua_State* L)
+{
+  auto gc = get_obj<GraphicsContext>(L, 1);
+  const float opacity = lua_tonumber(L, 2);
+  gc->opacity(opacity);
+  return 0;
+}
+
 const luaL_Reg GraphicsContext_methods[] = {
   { "__gc", GraphicsContext_gc },
   { "save", GraphicsContext_save },
@@ -420,6 +458,8 @@ const Property GraphicsContext_properties[] = {
   { "antialias", GraphicsContext_get_antialias, GraphicsContext_set_antialias },
   { "color", GraphicsContext_get_color, GraphicsContext_set_color },
   { "strokeWidth", GraphicsContext_get_strokeWidth, GraphicsContext_set_strokeWidth },
+  { "blendMode", GraphicsContext_get_blendMode, GraphicsContext_set_blendMode },
+  { "opacity", GraphicsContext_get_opacity, GraphicsContext_set_opacity },
   { nullptr, nullptr, nullptr }
 };
 
