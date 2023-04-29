@@ -26,12 +26,13 @@ namespace script {
 
 class GraphicsContext {
 public:
-  GraphicsContext(const os::SurfaceRef& surface) : m_surface(surface) { }
+  GraphicsContext(const os::SurfaceRef& surface, int uiscale) : m_surface(surface), m_uiscale(uiscale) { }
   GraphicsContext(GraphicsContext&& gc) {
     std::swap(m_surface, gc.m_surface);
     std::swap(m_paint, gc.m_paint);
     std::swap(m_font, gc.m_font);
     std::swap(m_path, gc.m_path);
+    m_uiscale = gc.m_uiscale;
   }
 
   os::FontRef font() const { return m_font; }
@@ -63,11 +64,11 @@ public:
   void strokeWidth(float value) { m_paint.strokeWidth(value); }
 
 #if LAF_SKIA
-  float opacity() const { return m_paint.skPaint().getAlphaf(); }
-  void opacity(float value) { m_paint.skPaint().setAlphaf(value); }
+  int opacity() const { return m_paint.skPaint().getAlpha(); }
+  void opacity(int value) { m_paint.skPaint().setAlpha(value); }
 #else
-  float opacity() const { return 1.0f; }
-  void opacity(float) { }
+  int opacity() const { return 255; }
+  void opacity(int) { }
 #endif
 
   os::BlendMode blendMode() const { return m_paint.blendMode(); }
@@ -102,6 +103,9 @@ public:
   void cubicTo(float cp1x, float cp1y, float cp2x, float cp2y, float x, float y) {
     m_path.cubicTo(cp1x, cp1y, cp2x, cp2y, x, y);
   }
+  void oval(const gfx::Rect& rc) {
+    m_path.oval(rc);
+  }
   void rect(const gfx::Rect& rc) {
     m_path.rect(rc);
   }
@@ -115,8 +119,14 @@ public:
     m_surface->clipPath(m_path);
   }
 
+  int uiscale() const {
+    return m_uiscale;
+  }
+
 private:
   os::SurfaceRef m_surface = nullptr;
+  // Keeps the UI Scale currently in use when canvas autoScaling is enabled.
+  int m_uiscale;
   os::Paint m_paint;
   os::FontRef m_font;
   gfx::Path m_path;

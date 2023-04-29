@@ -227,7 +227,7 @@ int Plugin_newMenuGroup(lua_State* L)
     lua_pop(L, 1);
 
     if (id.empty())
-      return luaL_error(L, "Empty id field in plugin:newCommand{ id=... }");
+      return luaL_error(L, "Empty id field in plugin:newMenuGroup{ id=... }");
 
     lua_getfield(L, 2, "title");
     if (const char* s = lua_tostring(L, -1)) {
@@ -286,6 +286,47 @@ int Plugin_deleteMenuGroup(lua_State* L)
   return 0;
 }
 
+int Plugin_newMenuSeparator(lua_State* L)
+{
+  auto plugin = get_obj<Plugin>(L, 1);
+  if (lua_istable(L, 2)) {
+    std::string group;
+
+    lua_getfield(L, 2, "group"); // Parent group
+    if (const char* s = lua_tostring(L, -1)) {
+      group = s;
+    }
+    lua_pop(L, 1);
+
+#ifdef ENABLE_UI
+    // Add a new separator if the "group" is defined
+    if (!group.empty() &&
+        App::instance()->isGui()) {  // On CLI menus do not make sense
+      if (auto appMenus = AppMenus::instance()) {
+        auto menuItem = std::make_unique<ui::MenuSeparator>();
+        plugin->ext->addMenuSeparator(menuItem.get());
+        appMenus->addMenuItemIntoGroup(group, std::move(menuItem));
+      }
+    }
+#endif // ENABLE_UI
+  }
+  return 0;
+}
+
+int Plugin_get_name(lua_State* L)
+{
+  auto plugin = get_obj<Plugin>(L, 1);
+  lua_pushstring(L, plugin->ext->name().c_str());
+  return 1;
+}
+
+int Plugin_get_path(lua_State* L)
+{
+  auto plugin = get_obj<Plugin>(L, 1);
+  lua_pushstring(L, plugin->ext->path().c_str());
+  return 1;
+}
+
 int Plugin_get_preferences(lua_State* L)
 {
   if (!lua_getuservalue(L, 1)) {
@@ -309,10 +350,13 @@ const luaL_Reg Plugin_methods[] = {
   { "deleteCommand", Plugin_deleteCommand },
   { "newMenuGroup", Plugin_newMenuGroup },
   { "deleteMenuGroup", Plugin_deleteMenuGroup },
+  { "newMenuSeparator", Plugin_newMenuSeparator },
   { nullptr, nullptr }
 };
 
 const Property Plugin_properties[] = {
+  { "name", Plugin_get_name, nullptr },
+  { "path", Plugin_get_path, nullptr },
   { "preferences", Plugin_get_preferences, Plugin_set_preferences },
   { nullptr, nullptr, nullptr }
 };

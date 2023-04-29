@@ -512,35 +512,37 @@ FileOp* FileOp::createSaveDocumentOperation(const Context* context,
 
   // Check image type support
   // TODO add support to automatically convert the image to a supported format
-  switch (fop->m_document->sprite()->pixelFormat()) {
+  const Sprite* sprite = fop->document()->sprite();
+  FileFormat* format = fop->m_format;
+  switch (sprite->pixelFormat()) {
 
     case IMAGE_RGB:
-      if (!(fop->m_format->support(FILE_SUPPORT_RGB))) {
+      if (!(format->support(FILE_SUPPORT_RGB))) {
         warnings += "<<- " + Strings::alerts_file_format_rgb_mode();
         fatal = true;
       }
 
-      if (!(fop->m_format->support(FILE_SUPPORT_RGBA)) &&
-          fop->m_document->sprite()->needAlpha()) {
+      if (!(format->support(FILE_SUPPORT_RGBA)) &&
+          sprite->needAlpha()) {
 
         warnings += "<<- " + Strings::alerts_file_format_alpha_channel();
       }
       break;
 
     case IMAGE_GRAYSCALE:
-      if (!(fop->m_format->support(FILE_SUPPORT_GRAY))) {
+      if (!(format->support(FILE_SUPPORT_GRAY))) {
         warnings += "<<- " + Strings::alerts_file_format_grayscale_mode();
         fatal = true;
       }
-      if (!(fop->m_format->support(FILE_SUPPORT_GRAYA)) &&
-          fop->m_document->sprite()->needAlpha()) {
+      if (!(format->support(FILE_SUPPORT_GRAYA)) &&
+          sprite->needAlpha()) {
 
         warnings += "<<- " + Strings::alerts_file_format_alpha_channel();
       }
       break;
 
     case IMAGE_INDEXED:
-      if (!(fop->m_format->support(FILE_SUPPORT_INDEXED))) {
+      if (!(format->support(FILE_SUPPORT_INDEXED))) {
         warnings += "<<- " + Strings::alerts_file_format_indexed_mode();
         fatal = true;
       }
@@ -549,37 +551,37 @@ FileOp* FileOp::createSaveDocumentOperation(const Context* context,
 
   // Frames support
   if (fop->m_roi.frames() > 1) {
-    if (!fop->m_format->support(FILE_SUPPORT_FRAMES) &&
-        !fop->m_format->support(FILE_SUPPORT_SEQUENCES)) {
+    if (!format->support(FILE_SUPPORT_FRAMES) &&
+        !format->support(FILE_SUPPORT_SEQUENCES)) {
       warnings += "<<- " + Strings::alerts_file_format_frames();
     }
   }
 
   // Layers support
-  if (fop->m_document->sprite()->root()->layersCount() > 1) {
-    if (!(fop->m_format->support(FILE_SUPPORT_LAYERS))) {
+  if (sprite->root()->layersCount() > 1) {
+    if (!(format->support(FILE_SUPPORT_LAYERS))) {
       warnings += "<<- " + Strings::alerts_file_format_layers();
     }
   }
 
   // Palettes support
-  if (fop->m_document->sprite()->getPalettes().size() > 1) {
-    if (!fop->m_format->support(FILE_SUPPORT_PALETTES) &&
-        !fop->m_format->support(FILE_SUPPORT_SEQUENCES)) {
+  if (sprite->getPalettes().size() > 1) {
+    if (!format->support(FILE_SUPPORT_PALETTES) &&
+        !format->support(FILE_SUPPORT_SEQUENCES)) {
       warnings += "<<- " + Strings::alerts_file_format_palette_changes();
     }
   }
 
   // Check frames support
-  if (!fop->m_document->sprite()->tags().empty()) {
-    if (!fop->m_format->support(FILE_SUPPORT_TAGS)) {
+  if (!sprite->tags().empty()) {
+    if (!format->support(FILE_SUPPORT_TAGS)) {
       warnings += "<<- " + Strings::alerts_file_format_tags();
     }
   }
 
   // Big palettes
-  if (!fop->m_format->support(FILE_SUPPORT_BIG_PALETTES)) {
-    for (const Palette* pal : fop->m_document->sprite()->getPalettes()) {
+  if (!format->support(FILE_SUPPORT_BIG_PALETTES)) {
+    for (const Palette* pal : sprite->getPalettes()) {
       if (pal->size() > 256) {
         warnings += "<<- Palettes with more than 256 colors";
         break;
@@ -588,12 +590,12 @@ FileOp* FileOp::createSaveDocumentOperation(const Context* context,
   }
 
   // Palette with alpha
-  if (!fop->m_format->support(FILE_SUPPORT_PALETTE_WITH_ALPHA)) {
-    if (!fop->m_format->support(FILE_SUPPORT_RGBA) ||
-        !fop->m_format->support(FILE_SUPPORT_INDEXED) ||
+  if (!format->support(FILE_SUPPORT_PALETTE_WITH_ALPHA)) {
+    if (!format->support(FILE_SUPPORT_RGBA) ||
+        !format->support(FILE_SUPPORT_INDEXED) ||
         fop->document()->colorMode() == ColorMode::INDEXED) {
       bool done = false;
-      for (const Palette* pal : fop->m_document->sprite()->getPalettes()) {
+      for (const Palette* pal : sprite->getPalettes()) {
         for (int c=0; c<pal->size(); ++c) {
           if (rgba_geta(pal->getEntry(c)) < 255) {
             warnings += "<<- Palette with alpha channel";
@@ -605,6 +607,22 @@ FileOp* FileOp::createSaveDocumentOperation(const Context* context,
           break;
       }
     }
+  }
+
+  // GIF doesn't support frame duration less than 20ms, also
+  // the duration of each frame will be floored to 10ms multiples.
+  if (format->support(FILE_GIF_ANI_LIMITATIONS)) {
+    bool durationLessThan20 = false;
+    bool milisecPrecision = false;
+    for (int i=0; i<sprite->totalFrames(); ++i) {
+        int frameDuration = sprite->frameDuration(i);
+        if (frameDuration < 20) durationLessThan20 = true;
+        if (frameDuration % 10) milisecPrecision = true;
+    }
+    if (durationLessThan20)
+      warnings += "<<- " + Strings::alerts_file_format_20ms_min_duration();
+    if (milisecPrecision)
+      warnings += "<<- " + Strings::alerts_file_format_10ms_duration_precision();
   }
 
   // Show the confirmation alert
@@ -620,7 +638,7 @@ FileOp* FileOp::createSaveDocumentOperation(const Context* context,
         ui::Alert::show(
           fmt::format(
             Strings::alerts_file_format_doesnt_support_error(),
-            fop->m_format->name(),
+            format->name(),
             warnings));
         ret = 1;
       }
@@ -630,7 +648,7 @@ FileOp* FileOp::createSaveDocumentOperation(const Context* context,
           1, // Yes is the default option when the alert dialog is disabled
           fmt::format(
             Strings::alerts_file_format_doesnt_support_warning(),
-            fop->m_format->name(),
+            format->name(),
             warnings));
       }
 
@@ -651,7 +669,7 @@ FileOp* FileOp::createSaveDocumentOperation(const Context* context,
   }
 
   // Use the "sequence" interface.
-  if (fop->m_format->support(FILE_SUPPORT_SEQUENCES)) {
+  if (format->support(FILE_SUPPORT_SEQUENCES)) {
     fop->prepareForSequence();
 
     std::string fn = filename;
@@ -664,13 +682,18 @@ FileOp* FileOp::createSaveDocumentOperation(const Context* context,
         false,                      // Doesn't have layers
         false);                     // Doesn't have tags
     }
+    // If the filename format is given, we have to check if the
+    // {frame} is specified, or in other case, if it's something like
+    // "..._1.png", replace the it with "..._{frame1}.png"
+    else if (fop->m_roi.frames() > 1) {
+      fn_format = replace_frame_number_with_frame_format(fn_format);
+    }
 
-    Sprite* spr = fop->m_document->sprite();
     frame_t outputFrame = 0;
 
     for (frame_t frame : fop->m_roi.selectedFrames()) {
-      Tag* innerTag = (fop->m_roi.tag() ? fop->m_roi.tag(): spr->tags().innerTag(frame));
-      Tag* outerTag = (fop->m_roi.tag() ? fop->m_roi.tag(): spr->tags().outerTag(frame));
+      Tag* innerTag = (fop->m_roi.tag() ? fop->m_roi.tag(): sprite->tags().innerTag(frame));
+      Tag* outerTag = (fop->m_roi.tag() ? fop->m_roi.tag(): sprite->tags().outerTag(frame));
       FilenameInfo fnInfo;
       fnInfo
         .filename(fn)
@@ -680,7 +703,7 @@ FileOp* FileOp::createSaveDocumentOperation(const Context* context,
         .frame(outputFrame)
         .tagFrame(innerTag ? frame - innerTag->fromFrame():
                              outputFrame)
-        .duration(spr->frameDuration(frame));
+        .duration(sprite->frameDuration(frame));
 
       fop->m_seq.filename_list.push_back(
         filename_formatter(fn_format, fnInfo));
@@ -707,15 +730,15 @@ FileOp* FileOp::createSaveDocumentOperation(const Context* context,
     fop->m_filename = filename;
 
   // Configure output format?
-  if (fop->m_format->support(FILE_SUPPORT_GET_FORMAT_OPTIONS)) {
-    auto opts = fop->m_format->askUserForFormatOptions(fop.get());
+  if (format->support(FILE_SUPPORT_GET_FORMAT_OPTIONS)) {
+    auto opts = format->askUserForFormatOptions(fop.get());
 
     // Does the user cancelled the operation?
     if (!opts)
       return nullptr;
 
     fop->m_formatOptions = opts;
-    fop->m_document->setFormatOptions(opts);
+    fop->document()->setFormatOptions(opts);
   }
 
   // Does data file exist?
@@ -1286,8 +1309,10 @@ ImageRef FileOp::sequenceImage(PixelFormat pixelFormat, int w, int h)
   else {
     sprite = m_document->sprite();
 
-    if (sprite->pixelFormat() != pixelFormat)
+    if (sprite->pixelFormat() != pixelFormat) {
+      setError("Error: image does not match color mode\n");
       return nullptr;
+    }
   }
 
   if (m_seq.last_cel) {

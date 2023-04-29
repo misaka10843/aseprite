@@ -35,6 +35,7 @@
 #include "ui/manager.h"
 #include "ui/menu.h"
 #include "ui/message.h"
+#include "ui/scale.h"
 #include "ui/separator.h"
 #include "ui/slider.h"
 #include "ui/system.h"
@@ -470,10 +471,11 @@ int Dialog_add_widget(lua_State* L, Widget* widget)
     // specific widget is not expansive (e.g. a canvas with a fixed
     // size)
     type = lua_getfield(L, 2, "hexpand");
+    if (type != LUA_TNIL) hexpand = lua_toboolean(L, -1);
+    lua_pop(L, 1);
     type = lua_getfield(L, 2, "vexpand");
-    if (type != LUA_TNIL) hexpand = lua_toboolean(L, -2);
     if (type != LUA_TNIL) vexpand = lua_toboolean(L, -1);
-    lua_pop(L, 2);
+    lua_pop(L, 1);
   }
 
   if (label || !dlg->hbox) {
@@ -1102,6 +1104,15 @@ int Dialog_canvas(lua_State* L)
     }
     lua_pop(L, 1);
 
+    type = lua_getfield(L, 2, "autoScaling");
+    if (type != LUA_TNIL) {
+      widget->setAutoScaling(lua_toboolean(L, -1));
+    }
+    lua_pop(L, 1);
+
+    if (widget->isAutoScaling())
+      sz *= ui::guiscale();
+
     widget->setSizeHint(sz);
 
     bool handleKeyEvents = false;
@@ -1146,6 +1157,12 @@ int Dialog_canvas(lua_State* L)
       type = lua_getfield(L, 2, "onmouseup");
       if (type == LUA_TFUNCTION) {
         Dialog_connect_signal(L, 1, widget->MouseUp, fill_mousemessage_values);
+      }
+      lua_pop(L, 1);
+
+      type = lua_getfield(L, 2, "ondblclick");
+      if (type == LUA_TFUNCTION) {
+        Dialog_connect_signal(L, 1, widget->DoubleClick, fill_mousemessage_values);
       }
       lua_pop(L, 1);
 
@@ -1355,7 +1372,11 @@ int Dialog_modify(lua_State* L)
 
     // TODO shades mode? file title / open / save / filetypes? on* events?
 
-    if (relayout) {
+    // Relayout only if the the dialog window is not being resized.
+    // This is due to the possibility of a script calling a method
+    // to modify dialog's properties (which might generate a relayout)
+    // during an ongoing resize event.
+    if (relayout && !dlg->window.isResizing()) {
       dlg->window.layout();
 
       gfx::Rect bounds(dlg->window.bounds().w,

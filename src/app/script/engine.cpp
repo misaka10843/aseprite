@@ -18,6 +18,7 @@
 #include "app/pref/preferences.h"
 #include "app/script/blend_mode.h"
 #include "app/script/luacpp.h"
+#include "app/script/require.h"
 #include "app/script/security.h"
 #include "app/sprite_sheet_type.h"
 #include "app/tilemap_mode.h"
@@ -160,6 +161,7 @@ void register_color_class(lua_State* L);
 void register_color_space_class(lua_State* L);
 #ifdef ENABLE_UI
 void register_dialog_class(lua_State* L);
+void register_editor_class(lua_State* L);
 void register_graphics_context_class(lua_State* L);
 #endif
 void register_events_class(lua_State* L);
@@ -194,6 +196,7 @@ void register_tileset_class(lua_State* L);
 void register_tilesets_class(lua_State* L);
 void register_timer_class(lua_State* L);
 void register_tool_class(lua_State* L);
+void register_uuid_class(lua_State* L);
 void register_version_class(lua_State* L);
 void register_websocket_class(lua_State* L);
 
@@ -216,16 +219,7 @@ Engine::Engine()
 #endif
 
   // Standard Lua libraries
-  luaL_requiref(L, LUA_GNAME, luaopen_base, 1);
-  luaL_requiref(L, LUA_COLIBNAME, luaopen_coroutine, 1);
-  luaL_requiref(L, LUA_TABLIBNAME, luaopen_table, 1);
-  luaL_requiref(L, LUA_IOLIBNAME, luaopen_io, 1);
-  luaL_requiref(L, LUA_OSLIBNAME, luaopen_os, 1);
-  luaL_requiref(L, LUA_STRLIBNAME, luaopen_string, 1);
-  luaL_requiref(L, LUA_MATHLIBNAME, luaopen_math, 1);
-  luaL_requiref(L, LUA_UTF8LIBNAME, luaopen_utf8, 1);
-  luaL_requiref(L, LUA_DBLIBNAME, luaopen_debug, 1);
-  lua_pop(L, 9);
+  luaL_openlibs(L);
 
   // Overwrite Lua functions
   lua_register(L, "print", print);
@@ -253,6 +247,9 @@ Engine::Engine()
   lua_pushcclosure(L, secure_os_execute, 1);
   lua_setfield(L, -2, "execute");
   lua_pop(L, 1);
+
+  // Enhance require() function for plugins
+  custom_require_function(L);
 
   // Generic code used by metatables
   run_mt_index_code(L);
@@ -460,6 +457,7 @@ Engine::Engine()
   register_color_space_class(L);
 #ifdef ENABLE_UI
   register_dialog_class(L);
+  register_editor_class(L);
   register_graphics_context_class(L);
 #endif
   register_events_class(L);
@@ -494,10 +492,11 @@ Engine::Engine()
   register_tilesets_class(L);
   register_timer_class(L);
   register_tool_class(L);
+  register_uuid_class(L);
   register_version_class(L);
 #if ENABLE_WEBSOCKET
   register_websocket_class(L);
- #endif
+#endif
 
   // Check that we have a clean start (without dirty in the stack)
   ASSERT(lua_gettop(L) == top);
@@ -577,7 +576,7 @@ bool Engine::evalFile(const std::string& filename,
   }
   std::string absFilename = base::get_absolute_path(filename);
 
-  AddScriptFilename add(absFilename);
+  AddScriptFilename addScript(absFilename);
   set_app_params(L, params);
 
   if (g_debuggerDelegate)
@@ -589,6 +588,18 @@ bool Engine::evalFile(const std::string& filename,
     g_debuggerDelegate->endFile(absFilename);
 
   return result;
+}
+
+bool Engine::evalUserFile(const std::string& filename,
+                          const Params& params)
+{
+  // Set the _SCRIPT_PATH global so require() can find .lua files from
+  // the script path.
+  std::string path =
+    base::get_file_path(
+      base::get_absolute_path(filename));
+  SetScriptForRequire setScript(L, path.c_str());
+  return evalFile(filename, params);
 }
 
 void Engine::startDebugger(DebuggerDelegate* debuggerDelegate)

@@ -55,6 +55,7 @@ namespace doc {
 
 namespace app {
 
+  class Editor;
   class Site;
 
   namespace tools {
@@ -96,6 +97,8 @@ namespace app {
                   const std::string& filename = std::string());
     bool evalFile(const std::string& filename,
                   const Params& params = Params());
+    bool evalUserFile(const std::string& filename,
+                      const Params& params = Params());
 
     void consolePrint(const char* text) {
       onConsolePrint(text);
@@ -136,7 +139,7 @@ namespace app {
   };
 
   void push_app_events(lua_State* L);
-  void push_app_theme(lua_State* L);
+  void push_app_theme(lua_State* L, int uiscale = 1);
   int push_image_iterator_function(lua_State* L, const doc::Image* image, int extraArgIndex);
   void push_brush(lua_State* L, const doc::BrushRef& brush);
   void push_cel_image(lua_State* L, doc::Cel* cel);
@@ -146,6 +149,7 @@ namespace app {
   void push_cels(lua_State* L, doc::Sprite* sprite);
   void push_color_space(lua_State* L, const gfx::ColorSpace& cs);
   void push_doc_range(lua_State* L, Site& site);
+  void push_editor(lua_State* L, Editor* editor);
   void push_group_layers(lua_State* L, doc::LayerGroup* group);
   void push_image(lua_State* L, doc::Image* image);
   void push_layers(lua_State* L, const doc::ObjectIds& layers);
