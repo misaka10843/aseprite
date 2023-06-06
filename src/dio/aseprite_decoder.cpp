@@ -160,6 +160,11 @@ bool AsepriteDecoder::decode()
               m_allLayers.push_back(newLayer);
               last_object_with_user_data = newLayer;
             }
+            else {
+              // Add a null layer only to match the "layer index" in cel chunk
+              m_allLayers.push_back(nullptr);
+              last_object_with_user_data = nullptr;
+            }
             break;
           }
 
@@ -171,6 +176,9 @@ bool AsepriteDecoder::decode()
             if (cel) {
               last_cel = cel;
               last_object_with_user_data = cel->data();
+            }
+            else {
+              last_object_with_user_data = nullptr;
             }
             break;
           }
@@ -240,7 +248,7 @@ bool AsepriteDecoder::decode()
             if (last_object_with_user_data) {
               last_object_with_user_data->setUserData(userData);
 
-              switch(last_object_with_user_data->type()) {
+              switch (last_object_with_user_data->type()) {
                 case doc::ObjectType::Tag:
                   // Tags are a special case, user data for tags come
                   // all together (one next to other) after the tags
@@ -284,7 +292,7 @@ bool AsepriteDecoder::decode()
           }
 
           default:
-            delegate()->error(
+            delegate()->incompatibilityError(
               fmt::format("Warning: Unsupported chunk type {0} (skipping)", chunk_type));
             break;
         }
@@ -583,6 +591,11 @@ doc::Layer* AsepriteDecoder::readLayerChunk(AsepriteHeader* header,
       layer = new doc::LayerTilemap(sprite, tsi);
       break;
     }
+
+    default:
+      delegate()->incompatibilityError(
+        fmt::format("Unknown layer type found: {0}", layer_type));
+      break;
   }
 
   if (layer) {
@@ -933,13 +946,21 @@ doc::Cel* AsepriteDecoder::readCelChunk(doc::Sprite* sprite,
       // Read width and height
       int w = read16();
       int h = read16();
-      int bitsPerTile = read16(); // TODO add support for more bpp
+      int bitsPerTile = read16();
       uint32_t tileIDMask = read32();
       uint32_t flipxMask = read32();
       uint32_t flipyMask = read32();
       uint32_t rot90Mask = read32();
       uint32_t flagsMask = (flipxMask | flipyMask | rot90Mask);
       readPadding(10);
+
+      // We only support 32bpp at the moment
+      // TODO add support for other bpp (8-bit, 16-bpp)
+      if (bitsPerTile != 32) {
+        delegate()->incompatibilityError(
+          fmt::format("Unsupported tile format: {0} bits per tile", bitsPerTile));
+        break;
+      }
 
       if (w > 0 && h > 0) {
         doc::ImageRef image(doc::Image::create(doc::IMAGE_TILEMAP, w, h));
@@ -974,6 +995,11 @@ doc::Cel* AsepriteDecoder::readCelChunk(doc::Sprite* sprite,
       }
       break;
     }
+
+    default:
+      delegate()->incompatibilityError(
+        fmt::format("Unknown cel type found: {0}", cel_type));
+      break;
 
   }
 
@@ -1038,6 +1064,11 @@ void AsepriteDecoder::readColorProfile(doc::Sprite* sprite)
       }
       break;
     }
+
+    default:
+      delegate()->incompatibilityError(
+        fmt::format("Unknown color profile type found: {0}", type));
+      break;
   }
 
   sprite->setColorSpace(cs);
@@ -1295,20 +1326,27 @@ void AsepriteDecoder::readPropertiesMaps(doc::UserData::PropertiesMaps& properti
   auto startPos = f()->tell();
   auto size = read32();
   auto numMaps = read32();
-  for (int i=0; i<numMaps; ++i) {
-    auto id = read32();
-    std::string extensionId; // extensionId = empty by default (when id == 0)
-    if (id &&
-        !extFiles.getFilenameByID(id, extensionId)) {
-      // This shouldn't happen, but if it does, we put the properties
-      // in an artificial extensionId.
-      extensionId = fmt::format("__missed__{}", id);
-      delegate()->error(
-        fmt::format("Error: Invalid extension ID (id={0} not found)", id));
+  try {
+    for (int i=0; i<numMaps; ++i) {
+      auto id = read32();
+      std::string extensionId; // extensionId = empty by default (when id == 0)
+      if (id &&
+          !extFiles.getFilenameByID(id, extensionId)) {
+        // This shouldn't happen, but if it does, we put the properties
+        // in an artificial extensionId.
+        extensionId = fmt::format("__missed__{}", id);
+        delegate()->error(
+          fmt::format("Error: Invalid extension ID (id={0} not found)", id));
+      }
+      auto properties = readPropertyValue(USER_DATA_PROPERTY_TYPE_PROPERTIES);
+      propertiesMaps[extensionId] = doc::get_value<doc::UserData::Properties>(properties);
     }
-    auto properties = readPropertyValue(USER_DATA_PROPERTY_TYPE_PROPERTIES);
-    propertiesMaps[extensionId] = doc::get_value<doc::UserData::Properties>(properties);
   }
+  catch (const base::Exception& e) {
+    delegate()->incompatibilityError(
+      fmt::format("Error reading custom properties: {0}", e.what()));
+  }
+
   f()->seek(startPos+size);
 }
 
@@ -1412,6 +1450,19 @@ const doc::UserData::Variant AsepriteDecoder::readPropertyValue(uint16_t type)
       }
       return value;
     }
+    case USER_DATA_PROPERTY_TYPE_UUID: {
+      base::Uuid value;
+      uint8_t* bytes = value.bytes();
+      for (int i=0; i<16; ++i) {
+        bytes[i] = read8();
+      }
+      return value;
+    }
+    default: {
+      throw base::Exception(
+        fmt::format("Unexpected property type '{0}' at file position {1}",
+                    type, f()->tell()));
+    }
   }
 
   return doc::UserData::Variant{};
@@ -1428,7 +1479,8 @@ void AsepriteDecoder::readTilesData(doc::Tileset* tileset, const AsepriteExterna
     if (chunk_type != ASE_FILE_CHUNK_USER_DATA) {
       // Something went wrong...
       delegate()->error(
-              fmt::format("WARNING: Unexpected chunk type {0} when reading tileset index {1}", chunk_type, i));
+        fmt::format("Warning: Unexpected chunk type {0} when reading tileset index {1}",
+                    chunk_type, i));
       f()->seek(chunk_pos);
       return;
     }
