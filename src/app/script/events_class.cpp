@@ -22,9 +22,11 @@
 #include "app/script/luacpp.h"
 #include "app/script/values.h"
 #include "app/site.h"
+#include "app/ui/main_window.h"
 #include "doc/document.h"
 #include "doc/sprite.h"
 #include "ui/app_state.h"
+#include "ui/resize_event.h"
 
 #include <any>
 #include <cstring>
@@ -47,8 +49,10 @@ namespace {
 using EventListener = int;
 
 class AppEvents;
+class WindowEvents;
 class SpriteEvents;
 static std::unique_ptr<AppEvents> g_appEvents;
+static std::unique_ptr<WindowEvents> g_windowEvents;
 static std::map<doc::ObjectId, std::unique_ptr<SpriteEvents>> g_spriteEvents;
 
 class Events {
@@ -266,6 +270,54 @@ private:
   obs::scoped_connection m_beforeCmdConn;
   obs::scoped_connection m_afterCmdConn;
   obs::scoped_connection m_beforePaintConn;
+};
+
+class WindowEvents : public Events
+                   , private ContextObserver {
+public:
+  enum : EventType {
+    Unknown = -1,
+    Resize,
+  };
+
+  WindowEvents(ui::Window* window)
+    : m_window(window) {
+  }
+
+  ui::Window* window() const { return m_window; }
+
+  EventType eventType(const char* eventName) const override {
+    if (std::strcmp(eventName, "resize") == 0)
+      return Resize;
+    else
+      return Unknown;
+  }
+
+private:
+
+  void onAddFirstListener(EventType eventType) override {
+    switch (eventType) {
+      case Resize:
+        m_resizeConn = m_window->Resize.connect(&WindowEvents::onResize, this);
+        break;
+    }
+  }
+
+  void onRemoveLastListener(EventType eventType) override {
+    switch (eventType) {
+      case Resize:
+        m_resizeConn.disconnect();
+        break;
+    }
+  }
+
+  void onResize(ui::ResizeEvent& ev) {
+    call(Resize, { { "width", ev.bounds().w },
+                   { "height", ev.bounds().h } });
+  }
+
+  ui::Window* m_window;
+  obs::scoped_connection m_resizeConn;
 };
 
 class SpriteEvents : public Events
@@ -518,6 +570,22 @@ void push_sprite_events(lua_State* L, Sprite* sprite)
 
   push_ptr<Events>(L, spriteEvents);
 }
+
+#ifdef ENABLE_UI
+
+void push_window_events(lua_State* L, ui::Window* window)
+{
+  if (!g_windowEvents) {
+    App::instance()->ExitGui.connect([]{ g_windowEvents.reset(); });
+    g_windowEvents = std::make_unique<WindowEvents>(window);
+  }
+  else {
+    ASSERT(g_windowEvents->window() == window);
+  }
+  push_ptr<Events>(L, g_windowEvents.get());
+}
+
+#endif // ENABLE_UI
 
 } // namespace script
 } // namespace app

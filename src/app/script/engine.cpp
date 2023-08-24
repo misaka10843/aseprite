@@ -32,6 +32,7 @@
 #include "doc/anidir.h"
 #include "doc/color_mode.h"
 #include "filters/target.h"
+#include "ui/base.h"
 #include "ui/cursor_type.h"
 #include "ui/mouse_button.h"
 
@@ -154,6 +155,7 @@ void register_app_pixel_color_object(lua_State* L);
 void register_app_fs_object(lua_State* L);
 void register_app_command_object(lua_State* L);
 void register_app_preferences_object(lua_State* L);
+void register_json_object(lua_State* L);
 
 void register_brush_class(lua_State* L);
 void register_cel_class(lua_State* L);
@@ -164,6 +166,7 @@ void register_color_space_class(lua_State* L);
 void register_dialog_class(lua_State* L);
 void register_editor_class(lua_State* L);
 void register_graphics_context_class(lua_State* L);
+void register_window_class(lua_State* L);
 #endif
 void register_events_class(lua_State* L);
 void register_frame_class(lua_State* L);
@@ -249,18 +252,26 @@ Engine::Engine()
   lua_setfield(L, -2, "execute");
   lua_pop(L, 1);
 
+  // Wrap package.loadlib()
+  lua_getglobal(L, "package");
+  lua_getfield(L, -1, "loadlib");
+  lua_pushcclosure(L, secure_package_loadlib, 1);
+  lua_setfield(L, -2, "loadlib");
+  lua_pop(L, 1);
+
   // Enhance require() function for plugins
   custom_require_function(L);
 
   // Generic code used by metatables
   run_mt_index_code(L);
 
-  // Register global app object
+  // Register global objects (app, json)
   register_app_object(L);
   register_app_pixel_color_object(L);
   register_app_fs_object(L);
   register_app_command_object(L);
   register_app_preferences_object(L);
+  register_json_object(L);
 
   // Register constants
   lua_newtable(L);
@@ -457,6 +468,14 @@ Engine::Engine()
   setfield_integer(L, "VERTICAL",   doc::algorithm::FlipType::FlipVertical);
   lua_pop(L, 1);
 
+  lua_newtable(L);
+  lua_pushvalue(L, -1);
+  lua_setglobal(L, "Align");
+  setfield_integer(L, "LEFT",   ui::LEFT);
+  setfield_integer(L, "CENTER", ui::CENTER);
+  setfield_integer(L, "RIGHT",  ui::RIGHT);
+  lua_pop(L, 1);
+
   // Register classes/prototypes
   register_brush_class(L);
   register_cel_class(L);
@@ -467,6 +486,7 @@ Engine::Engine()
   register_dialog_class(L);
   register_editor_class(L);
   register_graphics_context_class(L);
+  register_window_class(L);
 #endif
   register_events_class(L);
   register_frame_class(L);

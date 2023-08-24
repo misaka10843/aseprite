@@ -383,7 +383,7 @@ void Editor::setLayer(const Layer* layer)
         // If the user want to see the active layer edges...
         m_docPref.show.layerEdges() ||
         // If there is a different opacity for nonactive-layers
-        Preferences::instance().experimental.nonactiveLayersOpacity() < 255 ||
+        otherLayersOpacity() < 255 ||
         // If the automatic cel guides are visible...
         m_showGuidesThisCel ||
         // If grid settings changed
@@ -672,10 +672,7 @@ void Editor::drawOneSpriteUnclippedRect(ui::Graphics* g, const gfx::Rect& sprite
     m_renderEngine->setNewBlendMethod(pref.experimental.newBlend());
     m_renderEngine->setRefLayersVisiblity(true);
     m_renderEngine->setSelectedLayer(m_layer);
-    if (m_flags & Editor::kUseNonactiveLayersOpacityWhenEnabled)
-      m_renderEngine->setNonactiveLayersOpacity(pref.experimental.nonactiveLayersOpacity());
-    else
-      m_renderEngine->setNonactiveLayersOpacity(255);
+    m_renderEngine->setNonactiveLayersOpacity(otherLayersOpacity());
     m_renderEngine->setupBackground(m_document, IMAGE_RGB);
     m_renderEngine->disableOnionskin();
 
@@ -1920,8 +1917,16 @@ bool Editor::onProcessMessage(Message* msg)
 
     case kMouseEnterMessage:
       m_brushPreview.hide();
-      updateToolLoopModifiersIndicators();
-      updateQuicktool();
+
+      // Do not update tool loop modifiers when the mouse exits and/re-enters
+      // the editor area while we are inside the same tool loop (hasCapture()).
+      // E.g. This avoids starting to rotate a rectangular marquee (Alt key
+      // pressed) if we have the subtract mode on (Shift+Alt) and touch the
+      // editor edge (MouseLeave/Enter)
+      if (!hasCapture()) {
+        updateToolLoopModifiersIndicators();
+        updateQuicktool();
+      }
       break;
 
     case kMouseLeaveMessage:
@@ -2562,8 +2567,8 @@ void Editor::setZoomAndCenterInMouse(const Zoom& zoom,
   // extra space for the zoom)
   gfx::Rect visibleBounds = editorToScreen(
     getViewportBounds().createIntersection(gfx::Rect(gfx::Point(0, 0), canvasSize())));
-  screenPos.x = std::clamp(screenPos.x, visibleBounds.x, visibleBounds.x2()-1);
-  screenPos.y = std::clamp(screenPos.y, visibleBounds.y, visibleBounds.y2()-1);
+  screenPos.x = std::clamp(screenPos.x, visibleBounds.x, std::max(visibleBounds.x, visibleBounds.x2()-1));
+  screenPos.y = std::clamp(screenPos.y, visibleBounds.y, std::max(visibleBounds.y, visibleBounds.y2()-1));
 
   spritePos = screenToEditor(screenPos);
 
@@ -2978,9 +2983,18 @@ void Editor::updateAutoCelGuides(ui::Message* msg)
   }
 }
 
+int Editor::otherLayersOpacity() const
+{
+  if (m_docView && m_docView->isPreview())
+    return Preferences::instance().experimental.nonactiveLayersOpacityPreview();
+  else
+    return Preferences::instance().experimental.nonactiveLayersOpacity();
+}
+
 // static
 void Editor::registerCommands()
 {
+  // TODO merge with ToggleOtherLayersOpacity
   Commands::instance()
     ->add(
       new QuickCommand(
