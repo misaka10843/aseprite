@@ -1,0 +1,24 @@
+{
+  "name": "time-tracking",
+  "displayName": "Time Tracking",
+  "description": "An extension that collects work time data locally.",
+  "version": "1.0.2",
+  "author": {
+    "name": "Kacper Woźniak",
+    "email": "kac.wozniak@gmail.com",
+    "url": "https://thkaspar.itch.io/"
+  },
+  "contributors": [],
+  "publisher": "Kacper Woźniak",
+  "license": "CC-BY-4.0",
+  "categories": [
+    "Scripts"
+  ],
+  "contributes": {
+    "scripts": [
+      {
+        "path": "./extension.lua"
+      }
+    ]
+  }
+}

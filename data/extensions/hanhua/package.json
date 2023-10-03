@@ -1,0 +1,16 @@
+{
+  "name": "aseprite-language-sChinese",
+  "displayName": "Simplified Chinese",
+  "version": "1.2.23",
+  "author": { "name": "Just_Eleven", "email": "", "url": "" },
+  "publisher": "aseprite",
+  "license": "CC-BY-4.0",
+  "categories": [
+    "Languages"
+  ],
+  "contributes": {
+    "languages": [
+      { "id": "sChinese", "path": "sChinese.ini" }
+    ]
+  }
+}
