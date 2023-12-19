@@ -18,6 +18,7 @@
 #include "app/xml_document.h"
 #include "app/xml_exception.h"
 #include "base/fs.h"
+#include "base/replace_string.h"
 #include "cfg/cfg.h"
 
 #include <algorithm>
@@ -69,7 +70,7 @@ std::set<LangInfo> Strings::availableLanguages() const
       // Load display name
       cfg::CfgFile cfg;
       if (cfg.load(path))
-        displayName = cfg.getValue("", "display_name", displayName.c_str());
+        displayName = cfg.getValue("_", "display_name", displayName.c_str());
 
       result.insert(LangInfo(langId, path, displayName));
     }
@@ -154,10 +155,14 @@ void Strings::loadStringsFromFile(const std::string& fn)
     cfg.getAllKeys(section.c_str(), keys);
 
     std::string textId = section;
+    std::string value;
     textId.push_back('.');
     for (auto key : keys) {
       textId.append(key);
-      m_strings[textId] = cfg.getValue(section.c_str(), key.c_str(), "");
+
+      value = cfg.getValue(section.c_str(), key.c_str(), "");
+      base::replace_string(value, "\\n", "\n");
+      m_strings[textId] = value;
 
       //TRACE("I18N: Reading string %s -> %s\n", textId.c_str(), m_strings[textId].c_str());
 
