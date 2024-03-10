@@ -59,12 +59,14 @@ Playback::Playback(const Sprite* sprite,
                    const TagsList& tags,
                    const frame_t frame,
                    const Mode playMode,
-                   const Tag* tag)
+                   const Tag* tag,
+                   const int forward)
   : m_sprite(sprite)
   , m_tags(tags)
   , m_initialFrame(frame)
   , m_frame(frame)
   , m_playMode(playMode)
+  , m_forward(forward)
 {
   PLAY_TRACE("--Playback-- tag=", (tag ? tag->name(): ""), "mode=", mode_to_string(m_playMode));
 
@@ -86,7 +88,7 @@ Playback::Playback(const Sprite* sprite,
     if (tag) {
       addTag(tag, false, 1);
 
-      // Loop the given tag in the constructor infite times
+      // Loop the given tag in the constructor infinite times
       m_playing.back()->repeat = std::numeric_limits<int>::max();
     }
   }
@@ -244,13 +246,23 @@ bool Playback::handleExitFrame(const frame_t frameDelta)
           }
           break;
         }
+        else if (m_playMode == PlayAll)
+          break;
       }
 
-      if (frameDelta > 0 && m_frame == m_sprite->lastFrame()) {
+      if (frameDelta > 0 &&
+          ((m_frame == m_sprite->lastFrame() && m_forward > 0) ||
+           (m_frame == 0 && m_forward < 0))) {
         if (m_playMode == PlayInLoop) {
-          PLAY_TRACE("    Going back to frame=0 (PlayInLoop)", m_frame,
-                     m_sprite->lastFrame());
-          m_frame = 0;
+          if (m_forward > 0) {
+            PLAY_TRACE("    Going back to frame=0 (PlayInLoop)", m_frame,
+                      m_sprite->lastFrame());
+            m_frame = 0;
+          }
+          else {
+            PLAY_TRACE("    Going back to frame=last frame (PlayInLoop)");
+            m_frame = m_sprite->lastFrame();
+          }
           return false;
         }
         else {
@@ -259,10 +271,18 @@ bool Playback::handleExitFrame(const frame_t frameDelta)
           return false;
         }
       }
-      else if (frameDelta < 0 && m_frame == 0) {
+      else if (frameDelta < 0 &&
+               ((m_frame == 0 && m_forward > 0) ||
+                (m_frame == m_sprite->lastFrame() && m_forward < 0))) {
         if (m_playMode == PlayInLoop) {
-          PLAY_TRACE("    Going back to frame=last frame (PlayInLoop)");
-          m_frame = m_sprite->lastFrame();
+          if (m_forward > 0) {
+            PLAY_TRACE("    Going back to frame=last frame (PlayInLoop)");
+            m_frame = m_sprite->lastFrame();
+          }
+          else {
+            PLAY_TRACE("    Going back to frame=0 (PlayInLoop)");
+            m_frame = 0;
+          }
           return false;
         }
         else {
@@ -415,7 +435,8 @@ bool Playback::decrementRepeat(const frame_t frameDelta)
       PLAY_TRACE("    Repeat tag", tag->name(), " frame=", m_frame,
                  "repeat=", m_playing.back()->repeat,
                  "forward=", m_playing.back()->forward);
-      return true;
+      // Tag has only 1 frame, then don't move the playback cue.
+      return tag->frames() > 1;
     }
     else {
       // Remove tag from played
@@ -431,7 +452,7 @@ bool Playback::decrementRepeat(const frame_t frameDelta)
       m_playing.pop_back();
 
       // Forward direction of the parent tag
-      int forward = (m_playing.empty() ? +1: m_playing.back()->forward);
+      int forward = (m_playing.empty() ? m_forward: m_playing.back()->forward);
       bool rewind = (m_playing.empty() ? false: m_playing.back()->rewind);
 
       // New frame outside the tag
@@ -520,7 +541,7 @@ void Playback::goToFirstTagFrame(const Tag* tag)
 int Playback::getParentForward() const
 {
   if (m_playing.empty())
-    return 1;
+    return m_forward;
   else
     return m_playing.back()->forward;
 }
